@@ -1,0 +1,474 @@
+Classes and Inheritance:
+========================
+    * compiler provides default constructor, copy constructor and operator assignment.
+    * To override default constructor implement your own X::X() {}
+    * To override copy constructor implement your own X::X(const X& copy) {}
+    * To override assignment operator implement your own X& X::operator=(const X& rhs) {}
+    * If we provide a constructor, compiler will not provide default constructor
+    * It is better to provide explicity keyword for a constructor to avoid implicit conversion of parameters to the class.
+        e.g. class Widget {
+            Widget (int w);
+        }
+        int f(Widget &tmpWidget) {}
+        f(2); ==> This creates new Widget by passing 2 as the argument to Constructor.
+
+    * If we define a member function in the class, it will implicitly become inline.
+    * const char* str = "abcd"; ==> str will point to constant data. data can't change but pointer can.
+    * char* const str = "abcd"; ==> str is a constant pointer. Data it points to can change but pointer can not point to any thing else.
+    * const char* const str = "abcd"; ==> pointer is constant and data it points to is constant. Both can not change.
+    * if a member function has const at the end, it means it promises not to change (*this).
+        e.g. class Widget {
+            private:
+            int m_width;
+            public:
+            Widget(width):m_width(width){}
+            int getWidth() const {
+                // m_width = m_width*2; // NOT OK we are changing the object
+                return m_width; // OK
+            }
+        }
+    * If base class has method mf and if the derived class re-defines mf then misterious things can happen.
+    * For example, if a base class has two overloaded functions, void mf1(void) and void mf1(int).
+    * Now, if derived class redefines void mf1(void), clients will not be able to access void mf1(int) from derived class at all.
+    * This is called name hiding in derived class.
+    * Also because of name hiding, if a base class pointer points to derived class and a void mf1(void) is called, it will always call base class method irrespective of which derived class it points to.
+    * For non virtual functions, its always static lookup in c++.
+    * If a base class is polymorphically used, its destructor has to be virtual.
+    * Otherwise, when the base pointer is deleted while pointing to derived instance, clean up behavior will be undefined.
+    * (some compilers might complete it half by only doing base class destruction).
+    * If a base class a virtual function with default arguments, never change the default argument in the derived class.
+    * Because, default arguments are picked by compiler statically not at run time.
+    * so, even if the base pointer is pointing to derived object,
+      and when we call the virtual function without any arguments,
+      it will get the default argument defined in base class not in the derived class.
+    * If a base class has a virtual method it can be overriden in derived class even if the virtual method was private.
+
+Public/Private Inheritance:
+---------------------------
+    * When a derived class inherits a base class publicly, it is nothing but a is-a relationship.
+      So, Through derived class, we will be able to call any of the base class public methods and derived class internally can access protected methods.
+      The interface of base class will be carried over to derived class during public inheritance.
+
+    * When a derived class inherits a base class privately, it is has-a relationship.
+      In essence, derived class will not have the interface imported from base class.
+      But, it can call any of the base class's public/protected methods internally.
+      so, it is very similar to having a member variable of a base class in it.
+
+Iterators:
+----------
+    * 5 types of iterators are there.
+    * 1) Input iterators ==> they can only read the current position they point to.
+         They can only move forward one step after read at a time.
+         Examples are istream_iterator. suitable for single-pass algorithms.
+    * 2) Output iterators ==> they can only write the current position they point to.
+         They can only move forward one step after write at a time.
+         Examples are istream_iterator. suitable for single-pass algorithms.
+    * 3) forward iterators ==> they are similar to input and output iterators.
+         The additional functionality is they can read/write their current position more than once.
+         So, they are suitable for multi-pass algorithms.
+         e.g: nothing in std namespace. but, slist from different libraries that allow singly linked list iterators.
+    * 4) bidirectional iterators ==> these can move backwards as well along with forward iterators.
+         Examples are map, set, multimap etc...
+    * 5) random access iterators ==> most powerful.
+         Can move forward or backwards more than one step at a time. The movement cost is constant for any distance.
+         e.g. vector and string.
+    * It is very easy to create a new iterator class by inheriting public iterator class
+      Just need to put the write iterator category for traits to work.
+    * To write input iterator remember to implement * operator
+    * To write output iterator remember to implement = operator
+    * Suppose, we want to write a new inserter for a container, it will be some thing like this
+      template<class Container>
+        class MyInsertIterator : public iterator<output_iterator_tag,void,void,void,void> {
+        private:
+            Container *m_c;
+            typename Container::iterator itr;
+        public:
+            MyInsertIterator(Container &c, typename Container::iterator i) : m_c(&c),itr(i) {}
+            MyInsertIterator<Container> &operator++() { return *this; } // For Preincrement
+            MyInsertIterator<Container> &operator++(int) { MyInsertIterator tmp(*this);operator++();return tmp; } // For Postincrement
+            MyInsertIterator<Container> &operator*() { return *this; }
+            MyInsertIterator<Container> &operator=(typename Container::value_type &v) {
+                itr = m_c->insert(itr,v);
+                itr++;
+                return *this;
+            }
+        };
+
+New/Delete:
+-----------
+    * std::set_new_handler can install a function pointer for new operations.
+    * When the new fails that handler will be called and the handler can take care of either freeing up some memory.
+    * This will let new proceed next time or just exit(). function pointer is of type void(*fn)().
+    * std::new (nothrow) version will not throw an exception if new fails.
+    * But, instead will return NULL back.
+    * but, is of limited use because new may not throw an exception but subsequent construction of objects can throw an exception.
+      e.g: Widget *w = std::new(nothrow) new Widget;
+      new may not throw an exception here but, if Widget constructor is doing more new without nothrow,
+      it may end up throwing exceptionl
+    * Always better to do standard new and catch exception.
+
+Design Patterns:
+----------------
+    Singleton:
+    ------------
+        * Ensures that there is only one instance of a specific class in the whole process.
+        * e.g.:
+            class MySingleton {
+                public:
+                    static MySingleton *curInst;
+                    static MySingleton *getInstance();
+                private:
+                    MySingleton() {}
+            }
+            MySingleton::curInst = NULL;
+            MySingleton* MySingleton::getInstance() {
+                if (!curInst) {
+                    curInst = new MySingleton();
+                }
+                return curInst;
+            }
+
+    Factory Design Pattern:
+    ----------------------
+        * It is a creational design pattern
+        * Idea is to localize all items creations in one place so that when new item is added only one place need to change code
+        * e.g.:
+            class IMobile {
+            public:
+                virtual void Camera() = 0;
+                virtual void KeyBoard() = 0;
+                void printSpecs() {
+                    cout << Camera() << endl;
+                    cout << KeyBoard() << endl;
+                }
+            }
+
+            class AndroidMobile : public IMobile { }
+            class AppleMobile : public IMobile { }
+            class WindowsMobile : public IMobile { }
+            class MobileFactory {
+                public:
+                    IMobile *getMobile(int type);
+            }
+            IMobile* MobileFactory::getMobile(int type) {
+                switch(type) {
+                    case 'apple':
+                        return new AppleMobile();
+                    case 'windows':
+                        return new WindowsMobile();
+                    case 'android':
+                        return new AndroidMobile();
+                }
+            }
+
+    Observer Design Pattern:
+    ------------------------
+        * This is a behavioral design pattern
+        * Idea is to create observer and observable classes and notify all observers when observable needs to notify
+        * used in MVC, GUI based applications
+        * very popular
+            class IObserver {
+                public:
+                    virtual void notify() = 0;
+                }
+            }
+            class MyObservable {
+                private:
+                    static MyObservable *instance; // singleton
+                    set <IObserver *> observers;
+                    MyObservable() {} // Make it singleton
+                public:
+                    static getInstance();
+                    void addObserver(IObserver &obj) {
+                        observers.insert(&obj);
+                    }
+                    void removeObserver(IObserver &obj) {
+                        observers.erase(&obj);
+                    }
+                    void notifyObservers() {
+                        for (itr = observers.begin(); itr != observers.end(); itr++) {
+                            (*itr)->notify();
+                        }
+                    }
+            }
+            MyObservable* MyObservable::getInstance() {
+                if (!instance) {
+                    instance = new MyObservable();
+                }
+                return instance;
+            }
+
+            class MyObserver : public IObserver {
+                private:
+                    MyObservable *observable;
+                public:
+                    MyObserver() {
+                        observable = MyObservable::getInstance();
+                        observable.addObserver(*this);
+                    }
+                    ~MyObserver() {
+                        observable.removeObserver(*this);
+                    }
+            }
+
+    Template Pattern:
+    -----------------
+        * This is a behavioral design pattern
+        * Idea is base class will have a concrete method for some algorithm but, its inputs are left as
+          virtual methods in it. So, when classes derive they can provide the appropriate inputs and the base class will still have
+          logic for algorithm
+        * Example is if Account is a base class then withdraw logic will be present in that class as concrete. but, it requires certain
+          values such as the maxlimit for this account and whether the accout is validated etc... that can be done in derived class
+        * e.g.:
+            class Account {
+                public:
+                    virtual void Validate() = 0; 
+                    virtual void Allow() = 0; 
+                    virtual int maxLimit() = 0;
+                    void withdraw(int limit) {
+                        Validate();
+                        if (limit > maxLimit()) {
+                            cout << "ERROR";
+                        }
+                        Allow();
+                    }
+            }
+
+            class NormalAccount : public Account {
+                public:
+                    void Validate() {}
+                    void Allow() {}
+                    int maxLimit() { return 1000; }
+            }
+
+            class NormalAccount : public Account {
+                public:
+                    void Validate() {}
+                    void Allow() {}
+                    int maxLimit() { return 999999; }
+            }
+
+    chain of responsibility pattern:
+    -------------------------------
+    * Useful to pass commands to successors if we can't handle it
+    * famous example is C++ Exception handling
+    * If current object can't handle error then it passes it up the chain
+    e.g.:
+        enum error_t {ANALYZE=0,FIX,ALL};
+        class ErrorReport {
+            private:
+                error_t state;
+            public:
+                ErrorReport(error_t _state) : state(_state) {}
+                void dump() { }
+        }
+
+        class IError {
+            protected:
+                error_t state;
+                IError *successor;
+            public:
+                IError(_state):state(_state) {}
+                void setSuccessor(IError &s) {
+                    successor = &s;
+                }
+                virtual void processError(ErrorReport) = 0;
+        }
+
+        class AnalyzeError: public IError {
+            public:
+                AnalyzeError() : IError(ANALYZE);
+                void processReport(ErrorReport &report) {
+                    if (report.getState() != ANALYZE) {
+                        successor->processReport(report);
+                        return;
+                    }
+                    // PROCESS ANALYZE ERROR
+                }
+        }
+        class FixError: public IError {
+            public:
+                FixError() : IError(FIX);
+                void processReport(ErrorReport &report) {
+                    if (report.getState() != FIX) {
+                        successor->processReport(report);
+                        return;
+                    }
+                    // PROCESS FIX ERROR
+                }
+        }
+        class CatchAllError: public IError {
+            public:
+                CatchAllError() : IError(CatchAll);
+                void processReport(ErrorReport &report) {
+                    if (report.getState() != CLOSE) {
+                        // NO ACTION REQUIRED
+                    }
+                    // PROCESS ALL ERRORS
+                    successor->processReport(report);
+                    return;
+                }
+        }
+
+        main() {
+            AnalyzeError *ae = new AnalyzeError();
+            FixError *fe = new FixError();
+            CatchAllError *ce = new CatchAllError();
+
+            ae->setSuccessor(fe);
+            fe->setSuccessor(ce);
+
+            ErrorReport *report = new ErrorReport(CLOSE);
+            ae->processReport(report);
+        }
+    
+    command pattern:
+    ---------------
+    * Useful in multithreaded architecture
+    * We an encapsulate the command into a class so that we can pass the commands back and forth between threads
+      We can execute command from any thread
+    * e.g:
+        class ICommandTask {
+           public:
+                virtual void execute() = 0;
+        }
+        class BuyCommandTask {
+            Stock *s;
+            public:
+                BuyCommandTask(Stock &_s): s(&_s) {}
+                void execute() {
+                    s->buy();
+                }
+        }
+        class SellCommandTask {
+            Stock *s;
+            public:
+                SellCommandTask(Stock &_s): s(&_s) {}
+                void execute() {
+                    s->sell();
+                }
+        }
+
+    Adapter pattern:
+    ----------------
+    * We can put a wrapper on an existing legacy interface to make it look a  new interface
+    * e.g:
+        class LegacyAccount {
+            public:
+                void legacyPrint(){ }
+        }
+        class INewAccount {
+            public:
+                virtual void display() = 0;
+        }
+        class NewAccount : public INewAccount {
+            public:
+                void display() { }
+        }
+        class LegacyAdapter : public INewAccount, public LegacyAccount {
+            public:
+                void display() { legacyPrint(); }
+        }
+        main() {
+            vector <INewAccount *> accounts;
+            accounts.push_back(new NewAccount());
+            accounts.push_back(new LegacyAdapter());
+            for (int i = 0; i < accounts.size(); i++) {
+                accounts[i]->display();
+            }
+        }
+
+    visitor pattern:
+    ----------------
+    * If two parallel tiers or development activities need to happen we can use this
+    * Idea is to have a visitor interface and have more than one concrete visotors
+    * Have a element interface and have more than one concrete elements
+    * From each of concrete elements we can accept a visotor interface and call visit on it with this
+    * e.g:
+        class IVisit {
+            public:
+                virtual void visit(IElement *) = 0;
+        }
+        class IElement {
+            public:
+                virtual string name() = 0;
+                virtual void accept(IVisit *) = ;
+        }
+        class Element1 : public IElement {
+            void string name() {
+                return "Element1";
+            }
+            void accept(IVisit *object) {
+                object->visit(this);
+            }
+        }
+        class Element2 : public IElement {
+            void string name() {
+                return "Element2";
+            }
+            void accept(IVisit *object) {
+                object->visit(this);
+            }
+        }
+        class Visit1 : public IVisit {
+            public:
+                void visit(IElement *obj) {
+                    cout << obj->name();
+                }
+        }
+        class Visit2 : public IVisit {
+            public:
+                void visit(IElement *obj) {
+                    cout << obj->name();
+                }
+        }
+
+        main() {
+            vector <IElement *> elements;
+            elements.push_back(new Element1());
+            elements.push_back(new Element2());
+            Visit1 *v1 = new Visit1();
+            Visit2 *v2 = new Visit2();
+            for (int i = 0; i < elements.size(); i++) {
+                elements[i]->accept(v1);
+                elements[i]->accept(v2);
+            }
+
+
+    Facade Pattern:
+    ---------------
+    * Facade pattern is a structural design pattern
+    * It is like putting a simpler interface infront of complex software to accomplish common tasks
+    * e.g:
+        class Usb {
+            public:
+                bool isAvailable() {}
+                void connect() {}
+                void send(string file) {}
+        }
+        class BlueTooth{
+            public:
+                bool isAvailable() {}
+                void connect() {}
+                void authenticate() {}
+                void send(string file) {}
+        }
+        //The Facade
+        class FileTransfer {
+            public:
+                void sendFile(string filename) {
+                    Usb *u = new Usb();
+                    BlueTooth *b = new BlueTooth();
+                    if (u->available()) {
+                        u->connect();
+                        u->send(filename);
+                    } else if (b->available()) {
+                        b->connect();
+                        b->authenticate();
+                        b->send(filename);
+                    }
+                    else {
+                        cout << "Not sent" << endl;
+                    }
+                }
+        }

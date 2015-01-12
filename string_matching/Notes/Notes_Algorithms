@@ -1,0 +1,421 @@
+String Search:
+--------------
+    * Conventions Followed:
+        T: Given text [0....n]
+        P: Pattern [0....m]
+        n: Given text length -1 (for index purposes)
+        m: Given pattern length -1 (for index purposes)
+        
+    * Naive Algorithm:
+        For Naive algorithm we only have to move one character at a time
+        This results in O(n*m) complexity
+
+    * Robin Karp:
+        Based on finding hashes efficiently.
+        Uses modular arthematic to reduce the size of hash to be stored
+        q be some number we want to cap hashes on
+        d is length of possible characters set
+        Find the hash of Pattern P and first m characters of T=t[0]
+        Let p be the hash of P
+        t[0] be the hash of T[0...m]
+
+        h = pow(d,m-1)%q
+        p = t[0] = 0
+        for i = 0 to m
+            p = (d*p + P[i]) % q
+            t[0] = (d*t[0] + T[i]) % q
+        for i = 0 to n-m
+            if p = t[i] (meaning hashes matched)
+                return compare(p,T[i...i+m])
+            if i < n-m
+                t[i+1] = (d*(t[i]-T[i]*h)) + T[i+m]) % q
+                // Same as t[i+1] = (d*t[i] + T[i+m] - d*h*T[i]) % q
+                // multipliy current hash by d and add last character and remove first character
+
+    * Finite Automation:
+        This builds the finite automation of the given pattern
+        Thus, when we are trying to match the string we compare each incoming character in FSA
+        if the next state is the final (accepting state) then the pattern has matched
+        We need to build the lookup table "d" 
+        if current state is q and incoming char is a then d[q,a] will return the next state
+        initial state will be -1 and final state will be m
+        C is the possible character set 
+        d[q,a] = max { k : Pk =] Pqa }
+
+        FSA Matcher:
+            q = -1
+            for i = 0 to m
+                q = d[q,T[i]]
+                if q == m
+                    "pattern matched " at i-m
+
+        Build_FSA:
+            for q = -1 to m
+                for each a in C
+                    k = min(m+1,q+2)
+                    do
+                        k = k-1
+                    while (Pk =] Pq*a)
+                    d[q,a] = k
+            return d
+                for each possible character in C
+
+    * KMP:
+        Clever algorithm that avoids building the full look up table d
+        Instead just builds the table F that represents the finite automata state 
+        States start with -1 till m
+        when we reach state m we have matched the pattern
+
+        F: Finite Automata table that is used in KMP
+        q: current state of FSA
+        k: value used in building F[q] = max{ k < q: Pk =] Pq }
+           So value of F[q] represents the longest prefix of P that is proper suffix of Pq
+           * For programming purposes k will be one less than longest prefix of P that is suffix of Pq
+             For pattern "ababaca" F will be [-1,-1,0,1,2,-1,0]
+
+        Building F:
+            * F[q] contains the the longest prefix of P that is a proper suffix of Pq
+            * P[0] has only one character and thus, there can not be a prefix of P smaller than one
+              and still proper suffix of P0
+            * So, Start with F[0] = -1 and k = -1
+            * while filling F[q], k represents F[q-1] i.e. Longest prefix of P that is a proper sufix of Pq-1
+            * As long as P[q] is not matching P[k+1] use k as F[k]
+            * Let k' be F[k] then Pk' =] Pk. Means, effectively we are backing to a smaller prefixes
+            * We can visualize this as going to one of the previous states in FSA (IMPORTANT!!)
+            * F[k] stands for a smaller prefix length of P that can still be a suffix of Pq-1.
+              (because, P[q-k,q-1] was the prefix of P)
+            * So, use a smaller prefix of P that is still a proper suffix of Pq-1
+            * when P[q] is same as P[k+1], we can increment k
+            *  store F[q] = k
+
+            F = [0...m]
+            F[0] = -1
+            k = -1
+            for q = 1 to m
+                while (k > -1 && P[q] != P[k+1])
+                    k = F[k]
+                if P[q] == P[k+1]
+                    k++
+                F[q] = k
+            return F
+
+        Matching :
+            * Once we have the finite state transitions it is easy to do the match
+            * Start with initial state -1
+            * Compare the current incoming character with the next state
+            * If no match go to previous state in Finite state machine and try there
+            * If match move to next state
+            * when state is final state pattern matched
+            
+            int q = -1;
+            for i = 0 to n
+                while (q > -1 && T[i] != P[q+1])
+                    q = F[q]
+                if T[i] == P[q+1]
+                    q++
+                if (q == m) {
+                    cout << "Pattern at " << i-m
+                    q = -1 // start again
+                }
+
+Computational Geometry:
+-----------------------
+    * Cros Product: 
+        * Cross product is very useful in determining the line segment orientations and check for colinearity
+        * if p0 [x0,y0], p1 [x1,y1] and p2 [x2,y2] are three points
+        * p1 x p2 = determinant of 2x2 matrix [(x1,y1),(x2,y2)]
+        * p1 x p2 = x1*y2 - x2*y1
+        * (p1-p0) = (x1-x0,y1-y0)
+        * l1 = (p0,p1) and l2 = (p0,p2) are two line segments. if (p1-p0) x (p2-p0) is possitive then
+        l1 is clock wise from l2. p1 needs to turn left to reach l2
+        if (p1-p0)x(p2-p0) is negative then l1 is anti-clock wise from l2. p1 needs to turn right to reach l2
+        * if (p1-p0)x(p2-p0) is zero then, p0,p1,p2 are co-linear
+
+    * Line segment intersection:
+        * line segment l1 (p1,p2) is said to stradle other line if p1 and p2 are on different sides of the line
+        * to figure out a point p' stays on the line segment l1, p',p1,p2 are colinear and
+          min(p1.x,p2.x) <= p'.x <= max(p1.x,p2.x) && min(p1.y,p2.y) <= p'.y <= max(p1.y,p2.y)
+        * to figure out the direction(clock or anti-clock) of a point p' corresponding to l1 (p1,p2)
+          if (p'-p1) x (p2-p1) is possitive, then  p' is on the clock wise of (p1,p2).
+          p' needs to turn left to reach p2
+          if (p'-p1) x (p2-p1) is negative, then  p' is on the anti clock wise of (p1,p2). p' to turn right
+
+        Direction(p1,p2,p')
+          return (p'-p1)x(p2-p1)
+
+        On-Segment(p1,p2,p')
+          d = (p'-p1) x (p2-p1)
+          if d == 0 && min(p1.x,p2.x) <= p'.x <= max(p1.x,p2.x) && min(p1.y,p2.y) <= p'.y <= max(p1.y,p2.y)
+            return true
+
+          return false
+
+        Segments_intersect(p1,p2,p3,p4)
+            d1 = Direction(p3,p4,p1)
+            d2 = Direction(p3,p4,p2)
+            d3 = Direction(p1,p2,p3)
+            d4 = Direction(p1,p2,p4)
+
+
+            // Segments are straddling each other
+            if (d1*d2 < 0 && d3*d4 < 0)
+                return true
+
+            if (d1 == 0 && On-Segment(p3,p4,p1))
+                return true
+
+            if (d2 == 0 && On-Segment(p3,p4,p2))
+                return true
+
+            if (d3 == 0 && On-Segment(p1,p2,p3))
+                return true
+
+            if (d4 == 0 && On-Segment(p1,p2,p4))
+                return true
+
+            return false
+
+    * Convext Hull:
+        * Given a set of points convex hull determines the convex polygon that can be drawn to contain all points
+        * Graham's Scan:
+            Idea is to go through all the points and as long as we are going in anti clock wise order,
+            keep adding new points to the convex hull. if not, remove some existing points
+            input: vector<points>
+            Algorithm:
+                * Sort the points based on (y,x) coordinates and p0 be first element
+                  p0 is the point with lowest y coordinate.
+                  in case of ties, it will be lowest x coordinate among equal ys
+                * sort points (p1...pn) based on polar angle in anti-clockwise order around p0
+                  if two points have same polar angle then the sort them based on the distance from p0
+                * S is the stack
+                * push p0,p1,p2 onto stack
+                * for i = 3 to n
+                   while (direction(next-to-top(s),top(s),pi) <= 0) { // when turning right remove top
+                            pop(s)
+                    }
+                    push(pi)
+
+                 // it contains all Convex Hull points in anti clock wise order
+                 return S
+                   
+
+Numerical algorithms:
+---------------------
+    * Euclidean Algorithm:
+        gcd(a,b):
+            if b%a == 0 return a
+            else return gcd(b%a,a);
+
+    * Extended Euclidean Algorithm:
+        gcd(a,b,(x,y)):
+            if b%a == 0
+                x = 1; y = 0;
+                return a
+            else
+                d = gcd(b%a,a,(x',y'))
+                x = (y' - floor(b/a)*x')
+                y = x'
+
+        Explanation:
+            // d = gcd(a,b); d = a*x + b*y;
+            // gcd(a,b) = gcd(b%a,a)
+            // a*x + b*y = (b%a)*x' + a*y'
+            // a*x + b*y = (b-[b/a]*a)*x' + a*y'
+            // a*x + b*y = a*(y'-[b/a]*x') + b*x'
+            // Thus x = (y'-[b/a]*x') and y = x'
+
+        Uses:
+            This is useful in figuring out integer coeffecients of the gcd.
+            if gcd(a,b) = d and d = a*x + b*y then, with this algorithm we can find x and y values.
+            Useful in finding multiplicative inverse as well. ax = 1 (mod n) then x is multipliative inverse of a
+            if gcd(a,n) = 1 then we can find multipliative inverse of a.
+            Beause, 1 = a*x + n*y. If we apply mod both sides ax = 1 (mod n)
+            to find multiplicative inverse do extended euclidean on (a,n) and value of x will be multiplicative inverse
+            Used for problems such as chinese remainder theorem
+
+    * Chinese reminder theorem
+        It is useful for certain type of problems such as
+            The basket has certain number of eggs.
+            When taken two at a time five remains
+            when taken seven at a time three remains
+
+            x = 2 (mod 5)
+            x = 3 (mod 7)
+
+            and find x.
+
+            General theorem is:
+
+            x = a1 (mod m1)
+            x = a2 (mod m2)
+            x = a3 (mod m3)
+
+            M = m1*m2*m3;
+            bi = M/mi
+            bi' = multiplicative inverse of bi for mod mi
+            i.e 1 = bi*bi' (mod mi)
+
+            Then x = [a1*b1*b1' + a2*b2*b2' + a3*b3*b3'] (mod M)
+
+            Explanation:
+                When we mod above x with m1, m2, m3 respectively every term other than one will cancel out.
+                Also the term that remains will have a1 and a multiplicative pair that returns 1. so, it still satisfies all the other equations
+
+    * Horners rule
+    * Sieve of erosthenese for parallel prime testing
+
+Sorting:
+--------
+    * Insertion sort for small numbers
+    * Quick sort for rest( better to randomize it for best performance)
+    * External merge sort if data is big
+
+Search:
+-------
+    * Linear search (unsorted)
+    * Binary search (sorted)
+    * For changing frequencies, Maintain LRU cache for repeated access of certain elements
+    * For static frequencies, Build optimal binary search tree using frequency of keys ( use dynamic programming)
+    * For large data sets, we can use one sided binary search, if we think we are close to key.
+      start with binary search and once we are confident keep skipping 1,2,4,8 etc... elements
+    * Kadan's Algorithm:
+        * Used to find the maximum sum contiguous sub array of an array
+        * use two variables max_endinghere and max_sofar
+        * keep going through all elements and update max_endinghere for each element and update max_sofar if required
+            int max_endinghere = 0;
+            int max_sofar = 0;
+            for (int i = 0; i < a.size(); i++) {
+                max_endinghere += a[i];
+                // If contributes to negative sum then just dont include any numbers in the result
+                if (max_endinghere < 0)
+                    max_endinghere = 0;
+                if (max_sofar < max_endinghere)
+                    max_sofar = max_endinghere;
+            }
+            return max_sofar;
+            If there are only negative numbers, the output would be 0 here (indicating dont include any number)
+    * Easier version of Kadan's Algorithm:
+        * Uses Dynamic Programming
+            int cur_max = v[0];
+            int max_sofar = v[0];
+            for (int i = 1; i < v.size(); i++) {
+                // Either keep proceeding with previous sequence or start a new one
+                cur_max = max(cur_max+v[i],v[i]);
+                max_sofar = max(max_sofar,cur_max);
+            }
+            return max_sofar;
+
+            Here output will have atleast one element from input
+
+Statistics:
+-----------
+    * For large data sets Reservoir sample K and find median
+    * Interval Trees:
+        * To figure out if i1 (x1,y1) and i2 (x2,y2) are overlapping, come up with the cases 
+          when they dont overlap.
+          It is only possible if i2 is on left of i1 or i2 is on right of i1
+          i.e. i1.low > i2.high || i1.high < i2.low
+          i.e x1 > y2 || y1 < x2
+          So, for them to overlap negatation of previous condition
+          !(x1 > y2 || y1 < x2) <==> (x1 <= y2 && x2 <= y1)
+          Hence for (x1,y1) and (x2,y2) to overlap condition is (x1 <= y2 && x2 <= y1)
+        * Interval trees are augmented BST
+          Key is i.low or x cordinate. But, each node contains max value of y cordinates of all its
+          children.
+          max(node) = max(node->y, max(node->left), max(node->right))
+          To search an interval in the tree
+          node *root = NULL;
+          while (root && !overlap(root,interval)) {
+            if (root->left && max(root->left) >= interval.low)
+                root = root->left;
+            else
+                root = root->right;
+          }
+          return root;
+          TIP: To find the answer, its easier to think that always try to go to left node in case of
+               no overlap. If it does not overlap only two conditions that can happen. Interval 
+               is on the left of root or onto the right of the root. If it is on left, choosing
+               root->left was correct choice. but, if interval was on right, then if max(root->left)
+               was more than interval.low, then that interval that has this max value will overlap
+               with interval. In all other cases, we will go to right side. which is correct choice.
+
+Permutations:
+-------------
+    * Use swap method if keys are unique and rearrangement is needed
+    * To generate randon permutation swap A[i] with A[rand(i,n)]
+    * We can use next_permutation, prev_permutation to get permutations of repeated keys
+    * Swapping method of permuting helpful in exhaust searching NP Problems such as TSP as only two elements can change per permutations
+      and we can change objective constant time.
+
+Combinations:
+-------------
+    * Gray code can be used in NP Complete solution search as only one bit changes between sets
+    * Binary counter is easy to use to generate power sets
+    * K length subsets can be found recursively. ncr = nck + n-kcr-k
+    * Integer partition. Given a number, generate all sets that accumulate to the number.
+      Use recursive algorithm to generate numbers in lexico graphic order
+
+Graph Algorithms:
+-----------------
+    * Implementing in c++:
+        Adjacency list can be used for BFS,DFS,MST,Bellman ford, dijkstra, johnsons
+        Adjacency matrix is a better choice for floyd warshall and edmand karp.
+
+    * Shortest paths rules:
+        Use bfs for unweighted graphs
+        Use dijkstra for non negative weighted graphs
+        Use bellmon ford for graphs with negative weights
+        Use floyd warshall for all pair shortest paths
+        Use johnson for all pair shortest paths if graph is sparse
+
+    * MST:
+        Use kruskal or prims. Prims is preferable for ease of implimentation and efficiency.
+        Kruskals: sort edges and take each edge (u,v) if u,v does not belong to same forest merge them
+        Prims: Initialize keys for all vertices to Inf. Start growing by some source vertex.
+
+    * Transitive enclosure:
+        Use floyd warshall to determine transitive closure of a graph.
+        T[i][j] = 1 if there is a path from vertex i to vertex j
+
+Bipartite matching:
+-------------------
+    * For lot of assigning problems, easier to model them as bipartite graphs.
+    * Maximum matching in a bipartite graphs can be found using maximum flow graph
+    * Examples:
+        Given n dice. Each dice has certain letters on each of its heads.
+        Given a string of length k(less than n) find if there is a way to roll the dice to generate word.
+        Make dice and letters of string as two sets of vertices.
+        Add edge from dice to each letter of string if head has the letter. Now find if maximal match is >= k.
+
+        Given n boys and n girls and compatibilityt pairs between a boy and a girl is given, find maximum matches.
+        Given a string of length n, need to shffle characters in the string to maximize number of letters in the string that moved.
+        Make vertices of each letter of string and each position of string.
+        Add edge between a letter to all the positions but its current position.
+        Now, maximal match in this graph will be the answer.
+
+Network flow:
+-------------
+    * Edge connectivity of a graph is minimum number of edges to be removed to split graph into two pieces.
+    * Vertex connectivity of a graph is minimum number of vertices to be removed to split the graph into two pieces.
+    * Both can be solved using network flow graph.
+      For edge connectivity, treat graph unit weighted and find minimum flow between Vi and remaining n-1 vertices.
+      Minimum flow will be the minimum number of edges need to be removed to disconnect ith vertex from graph.
+      Similarly by reducing graph we can find vertex connectivity.
+    * Edge disjoint paths between i and j vertices will be the flow between i and j in a unit weigted graph.
+
+Some NP Complete problems:
+--------------------------
+    * Hamiltonian cycle, hamiltonian path:
+      Visit all vertices of graph exactly onces a NP complete problem.
+    * Eulerian cycle, eulerian path:
+      Visit all paths in the graph exactly once is polynomial.
+      Eulerian cycle of undirected graph is possible when graph is connected and each degree of vertex is even.
+      Eulerian cycle of directed graph is possible when graph is strongly connected and indegree and outdegree of each vertex same.
+      For these type of graphs, do DFS and find cycle and remove it from graph.
+      This will leave a subgraph with all other required constraints still met.
+      After finding all cycles, we can splice them back by using the commom vertex between the two cycles.
+      When the constraints are not met, we can solve the problem of finding shortest cycle that can visit all edges atleast once.
+      To do this, need to modify input graph to obey degree constraints.
+      For undirected graphs, add an edge between two odd degreed vertices with the weight as their shortest paths.
+      Similarly, for directed graphs add edge between vertices i,j where i is deficient on outgoing degree and j is deficient on incoming.
+      Edge weight will be the shortest path between i and j.

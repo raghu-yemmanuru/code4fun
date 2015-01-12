@@ -1,0 +1,25 @@
+http://www.aosabook.org/en/distsys.html
+
+Few things to keep in mind when trying to design distributed systems
+1) Availability
+2) Performance
+3) Reliability
+4) Scalability
+5) Manageability
+
+
+As per CAP theorem, only two of Consistency, Availability, Partition Tolerance can be held at a given time. Since, system generally have to be availale and be tolerant with partitions, systems tend to support eventual consistency.
+
+Service Oriented Architecture (SOA) helps in distributed design. Keep different functions as a well contained services. This will let better design and better reliability.
+
+Redundancy needs to be maintained for data nodes inorder to maintain reliability. It can also help in scalability.
+
+For better scalability and fastness, Good to have a stateless (Request) nodes at the front that can load balance themselves. Request nodes can maintain local cache/global cache/distributed caches to get better performance.
+
+Proxies are another very useful systems to have to achieve better performance under heavy loads. It can consolidate requests and minimize hits onto data nodes. They can reduce numer of requests to data nodes by grouping lot of similar requests and serving them by sending one dat request.
+
+Using indexes can help lookup data easily and sending to appropriate data nodes. We can have multi layer indexes for better performance. First level can pick the right shard group and then second index can pick the appropriate node and so forth.
+
+Inverted indexes are better when the data space is huge. Nested indexes can have better space complexity than just maintaining large indexes. e.g: inverted index for a book store may contain a word and the book that contains it. Nested index can contain all books as the value instead of just one book. If we have billions of books then your key space (all words from dictionary) will be smaller.
+
+Consistent Hashing is very useful in partitioning large data into different shards. But, when new nodes get added, maintaing shards correctly is tricky.

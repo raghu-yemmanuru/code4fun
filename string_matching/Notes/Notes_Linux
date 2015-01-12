@@ -1,0 +1,208 @@
+Power on procedure:
+-------------------
+    
+    BIOS:
+    -----
+    * When power applied first AC converts to DC and processor looks at a specific address
+    * This address is hardware(board) specific and we need to store BIOS/Boot Loader in there
+    * BIOS (basic input output system) performs hardware integrity checks (POST - power on self test)
+    * BIOS loads boot loader by looking at floppy/CD
+    * If BIOS can't find those drives, then it loads program located in MBR
+    * MBR is first sector of first drive's first partition
+    * MBR generally has boot loader and the initial boot loader has to be with in 512 bytes size
+    
+    Boot Loader:
+    ------------
+    * boot loader program checks its config file and loads the kernel from specified partition 
+    * boot loader generally locates the zipped kernel image (zImage) and unzips onto memory
+    * Since its all in physical memory, Boot loader has to load it on the address applicable for current SDRAM
+    * After unzipping the kernel it also loads the provided initrd and root file system and provide it to kernel
+    
+    Kernel:
+    -------
+    * Once kernel starts loading it looks for appropriate boot parameters and work with them
+    * interesting keys are root='XYZ' (denotes where the root fs is present), init = 'ABC' (which init program to start)
+      initrd = 'PQR' (where is the initrd is located)
+    * Generally, rootfs is mandatory for kernel to work with as after setting up hardware/memory etc... it has to start
+      init program. To do so, it needs a root file system on which to look for init program
+    * If rootfs is too large or too sophisticated, its impractical to have the rootfs mounted at the early stage of kernel
+    * So, generally on embedded linux, initrd is provided that contains bare minimum drivers and other utilities
+      These will assist in mounting the real root file system. So that kernel can actually finish its booting
+    * if kernel comes across initrd boot parameter, it will unzip it and look for linuxrc program under it.
+      after this, kernel will mount rootfs and invoke init program from root file system
+    * if initramfs is supported, then no boot parameter needs to be passed for this.
+      Kernel will already be built with cpio archive of ram disk in its zImage
+      kernel will unzip this archive and look for /init and just invokes. It wont go ahead and try mounting rootfs
+    * if initrd or initramfs is not present then, it directly unmounts rootfs and invokes init program (/sbin/init).
+    
+    Init:
+    -----
+    * Generally all distributions(Redhat/Ubuntu) have init program that follows System V principles.
+    * it looks for /etc/inittab file and starts entering the level mentoined in here
+    * exiting levels
+        0 (halt)
+        1 (Single user mode)
+        2 (Multiuser without NFS)
+        3 (Full multiuser mode)
+        4 (unused)
+        5 (X system)
+        6 (reboot)
+    * depending on default level configured under /etc/inittab, init program enters /etc/rc.d/rcN.d directory
+    * it invokes all scripts under it strting with S in numerically increasing order
+    * similarly, when it exits a level it will invoke all scripts starting with K in numerically increasing order
+
+
+Kernel Initialization (from Embedded linux Premier):
+----------------------------------------------------
+    * Basic steps include Bootstrap loader -> kernel's head.o -> start_kernel() in main.c -> setup_arch() -> kthread_spawn
+      -> run_init_process()
+    Bootstrap Loader:
+    -------------------
+        * There are two types of boot loaders we can roughly think of.
+          a. Regular Lilo/Grub Boot loader
+            Regular boot loader locates kernel image and loads to memory and passes control to it.
+          b. Bootstrap boot loader
+            But, additional steps need to be performed before C program of kernel kicks in (start_kernel function)
+            We need to unzip image, initialize certain hardware such as Instruction/Data cache etc...
+            Generally, this responsibility falls on bootstrap boot loader. It will be piggy backed in the regular kernel image
+            It will be the first to take control after boot loader.
+        * General bootable kernel image for any architecture will be composed of this bootstrap bootloader
+          it consists of head.o + big_endion.o + misc.o + piggy.o
+          (head.o + big_endian.o + misc.o) is what is bootstrap loader
+          Boot loader will pass control first to head.o
+          * head.o : It will have assembly code to initialize architecture
+          * big_endion.o : minitor thingy to convert from little endian to big endian for certain (ARM) processors
+          * misc.o : contain routines used to decompress zImage (Uncompressing Linux .. Done message comes from here)
+          * piggy.o : it contains the actual kernel image that will be linked to the top ones
+            On top of actual stripped and zipped kernel image, piggy.s assembly file sits that just includes this image
+            Thus, name is piggy.o
+    Kernel (zImage):
+    ---------------
+        * Kernel's Assembly head.o
+            * After bootstrap loader, control comes to zImage. Unfortunately the entry point in kernel is also head.o
+              * Kernel's head.o is locaed under arch/xxx/head.S
+              * kernel's head.o does bunch of hardware specific validation/setup
+                * check valid processor and architecture
+                * create initial page table entries
+                * Enable processor's MMU
+                * estabilish error detection/reporting
+                * Jumpts to start_kernel() in main.c
+                * if we try stepping through this part in debugger, its very tricky. because, before setting up MMU,
+                  processor works with physical address. After MMU setup, it works with virtual addresses. For every address
+                  lookup, it will contact MMU.
+        * Kernel's start_kernel():
+            * setup_arch()
+                * calls setup_processor and parses all command lines passed
+                * command level parsing:
+                    * depending on boot level parameters, certain setup will be done
+                        e.g: when console= parameter is sent console_setup is called
+                        __setup("console=",console_setup)
+                        this lets any device driver to call the macro to handle a specific command procesing
+                        kernel just goes through all the function handler setups and call appropriate ones
+                        __setup() internally call __setup_param() macro
+                        what this macro does is it setsup all the functions and key/values in a .init.setup section
+                    * The way these macros work is, during compiling the __setup_param() macro compiles to place the
+                      contents under .init.setup section
+                      kernel linker program then acumulates all the elements under same section into one group
+                      demarked by __setup_start and __setup_end structs. (during ELF generation)
+                    * When kernel needs to call all the functions, it goes through these struct addresses and then,
+                      call the corresponding function pointers for the appropriate boot param
+                    * This logic of placing group of contents under same sections is heavily used in kernel.
+                      Both compiler and linker work together to accomplish this.
+                      e.g: __init__ macro puts all the functions under .init section that can be reclaimed after booting up
+                    * Also, certain boot parameters are treated as early ones and handled early and others are handled later
+                * Subsystem initialization:
+                    * After command level processing, subsystem level initialization takes place.
+                      Compliler/Linker work together to provide special macros that can be used by
+                      board vendors/device driver writes.
+                      Macros such as core_initcall, arch_initcall vendors puts their funtions in the 
+                      appropriate .initcall section. there are different levels defined by each macro.
+                      core_initcall macro places all its functions in level 1
+                      arch_initcall macro places all its functions in level 3 etc..
+                      e.g: arch_initcall(customize_machine) in main.c places customize_machine function
+                           in section ".initcall3.init"
+                    * Kernel goes through level by level and call all the functions with in this level
+                      sections.
+            * init Thread
+                * After all the actions in setup_kernel(), it calls rest_init()
+                * rest_init() creates a kernel thread with kernel_init as first parameter and then goes to cpu_idle()
+                * on kthread spawn (pid is 1), kernel_init() calls do_initcalls() that goes through
+                  all *_initcall macros and finishes
+                * There are two loops that handle __initcall sections. one do_pre_smp_initcalls() goes from 
+                  __initcall_start till to __early_initcall_end. 
+                  other goes from __early_initcall_end to __initcall_end struct pointers
+                * After cleaning up all .init sections kernel_init() calls post_init()
+                * post_init() checks boot parameter "init" and appropriately execv's init process through run_init_process
+                * it looks for init in this order
+                    * boot param "init"
+                    * /sbin/init
+                    * /etc/init
+                    * /bin/init
+                    * /bin/bash
+
+User Space initialization:
+---------------------------
+    * For kernel to do any thing useful, it need to start init process
+    * For this, it requires a root file system
+    * root file system should follow Filesystem Hierarchy Standard (FHS)
+      should contain bin,dev,etc,home,lib.sbin,usr,var,tmp directories
+      bin,dev,etc,lib are mandatory
+    * Minimal root file system an be built using busybox
+    * All different linux vendors (Redhat,Ubuntu) etc.. spend most of their time in customizing root file system
+    * The default (unless custom provided) init process after bring up, checks for /etc/inittab and enters system V levels
+    * If rootfs is too big to fit in memory or requires mounting and thus, requires more drivers,
+      it may be hard some times to load all required software during early kernel bootup.
+      So, lot of embedded linux systems seek to either initrd or initramfs for support
+    * initrd
+       * Its a traditional file system but very minimal and zipped to contain its size
+       * its a self-contained root file system that usuall contains directives to load specific device drivers
+       * these device drivers are useful in loading the real root file system by kernel
+       * when kernel sees initrd as the boot parameter, it loads it in memory such as /dev/ram0 (generally from compact flash)
+       * then kernel looks for linuxrc file and invokes it. Generally this file loads required drivers
+       * if root=/dev/ram0 is provided, then kernel skips launching linuxrc and considers initrd as final root file system.
+         In such case, it looks for init process under it and invokes it.
+    * initramfs
+        * its more popular and latest than initrd.
+        * its not a file system and just a cpio archive. thus, much easier to build and use
+        * kernel internally has support for building initramfs cpio from its repository
+        * either we can use the kernel provided gen_initramfs_list.sh or build our own cpio archive
+        * By passing the location of initramfs to kernel through configuration parameter INITRAMFS_SOURCE it gets
+          embedded in linux kernel image itself.
+        * When kernel is built with initramfs it unzips initramfs and look for init file under it and just execute it
+        * I think after this, it does not go and try invoking init again from root file system (Not sure?)
+
+                 
+
+
+    
+interrupt handlers are run during hardware interrupts. Each driver can register to its own hardware interrupt and can get their irq_handler called during hardware interrupt. When a irq_handler is running, the same interrupt is always turned off. Other interrupts can interrupt current irq_handler and we use interrupt stack for this.
+bottom halves in linux kernel has two pices.
+softirqs:
+---------
+1) Two of the same softirqs can be running simultaneously on two different cores. So, need to be careful in writing code. Softirqs are registered at compile time in kernel and can not change.
+2) It can be invoked 
+    * after hardware irq is handled, 
+    * In ksoftirqd worker thread
+    * In any code that explicitly execute. (Network drivers)
+3) Softirqs can run parallely on different cores. so, generally they maintain per processor data to work well. If they lock a resource, then other softirqs from other cores will never run until the lock is released. so, we might very well use tasklets
+tasklets:
+----------
+Built on top of softirq. Two of the same type of tasklet can not run simultaneously on different cores. Different types of tasklets can run though.
+work queues: Third way of doing bottom half work. but, These guys run in process context so this can block.
+worker queues:
+--------------
+Another way of doing bottom half. But, they can block as they run in the process context of worker threads.
+
+Locking methodology:
+--------------------
+If data is shared in softirq, have to lock the data from other cores (spinlock)
+If data is shared with irqs, need to disable interrupts and lock it
+If data is shared with other tasklets, need to disable bottom halves and lock it
+
+Kernel Synchronization:
+-----------------------
+Code that is safe from concurrent access from an irq handler is said to be interrupt-safe
+Code that is safe from concurrent access on SMP is said to be smp-safe
+Code that is safe from concurrent with kernel preemption is said to be preemption-safe
+atomic_t is very useful for simple increment/decrement. This will provide atomicity across cores.
+Spin Locks are more useful as they can do more than just increment/decrement variables. Blockers will be actively waiting. Generally, it is better to hold spin lock for shorter time than 2*context_switch_time. Using spin locks make code SMP-safe. To also save from interrupts, we can use spin_lock_irqsave() variation to turn off interrupts and take lock.
